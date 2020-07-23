@@ -12,14 +12,14 @@
 #include "EnumStrings.h"
 #include "CommandLineOptions.h"
 
-mypopup::mypopup(ssrtools *ssr, QWidget *parent) :
+mypopup::mypopup(ScreenRecorder *ssr, QWidget *parent) :
     QWidget(parent),
     ui(new Ui::mypopup)
 {
     ui->setupUi(this);
     this->setWindowFlags(Qt::FramelessWindowHint | Qt::WindowSystemMenuHint | Qt::WindowMinMaxButtonsHint|Qt::WindowStaysOnTopHint);
 
-    this->ssr = static_cast<ssrtools*>(ssr);
+    this->ssr = static_cast<ScreenRecorder*>(ssr);
 
     InputInit();
 

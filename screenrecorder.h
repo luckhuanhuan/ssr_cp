@@ -1,43 +1,31 @@
-#ifndef SSRTOOLS_H
-#define SSRTOOLS_H
+#ifndef SCREENRECORDER_H
+#define SCREENRECORDER_H
 
+#include <QPushButton>
+#include <QLabel>
+#include <QSpinBox>
 #include <QWidget>
+
 #include "mypopup.h"
 #include "OutputSettings.h"
 #include <memory>
 #include "OutputManager.h"
 #include "Global.h"
 #include "WidgetWrapper.h"
-
+#include "X11Input.h"
 #if SSR_USE_PULSEAUDIO
 #include "PulseAudioInput.h"
 #endif
-
-
-namespace Ui {
-class ssrtools;
-}
-
 class mypopup;
 class X11Input;
 
-class input_widgets : public QWidget
-{
+class input_widgets : public QWidget{};
 
-};
+class output_widgets : public QWidget{};
 
-class output_widgets : public QWidget
-{
+class record_widgets : public QWidget{};
 
-};
-
-class record_widgets : public QWidget
-{
-
-};
-
-
-class ssrtools : public QWidget
+class ScreenRecorder : public QWidget
 {
     Q_OBJECT
 
@@ -45,8 +33,8 @@ private:
     static constexpr int PRIORITY_RECORD = 0, PRIORITY_PREVIEW = -1;
 
 public:
-    explicit ssrtools(QWidget *parent = nullptr);
-    ~ssrtools();
+    explicit ScreenRecorder(QWidget *parent = nullptr);
+    //~ScreenRecorder();
 
     void setStyle();
 
@@ -61,24 +49,25 @@ public:
     void LoadInputSettings(QSettings* settings);
     void LoadOutputSettings(QSettings* settings);
 
-
     //record
     void StartInput();
     void StopInput();
 
-
+    void StartOutput();
+    void StopOutput(bool final);
+    void StopPage(bool save);
+    //void UpdateSysTray();
+    void FinishOutput();
+    void UpdateRecordButton();
+    bool IsBusy();
 private slots:
     void on_m_toolButton_options_clicked();
-
-    void on_m_pushButton_start_clicked();
-
-
     void on_m_pushbutton_video_select_rectangle_clicked();
-
     void on_m_pushbutton_video_select_window_clicked();
-
     void OnUpdateInformation();
-
+    void OnRecordStart();
+    void OnRecordPause();
+    void OnRecordStartPause();
 
 private:
     void LoadInputProfileSettings(QSettings* settings);
@@ -94,7 +83,6 @@ private:
     void StopGrabbing();
     void UpdateRubberBand();
     void SetVideoAreaFromRubberBand();
-
 
 #if SSR_USE_PULSEAUDIO
     void LoadPulseAudioSources();
@@ -115,12 +103,11 @@ protected:
     virtual void keyPressEvent(QKeyEvent* event) override;
 
 private:
-    Ui::ssrtools *ui;
     mypopup *mp;
     QSettings settings;
 
     bool options_show;
-
+    bool m_wait_saving;
     bool m_video_area_follow_fullscreen;
     unsigned int m_video_x, m_video_y, m_video_in_width, m_video_in_height;
     unsigned int m_video_frame_rate;
@@ -137,7 +124,9 @@ private:
     QButtonGroup *m_buttongroup_video_area;
 
     QLabel *m_label_video_x, *m_label_video_y, *m_label_video_w, *m_label_video_h;
-
+    QSpinBox *m_spinbox_video_x, *m_spinbox_video_y, *m_spinbox_video_w, *m_spinbox_video_h;
+    QPushButton *m_pushbutton_start, *m_pushbutton_stop, *m_pushbutton_options;
+    QPushButton *m_pushbutton_video_select_rectangle, *m_pushbutton_video_select_window;
     bool m_grabbing, m_selecting_window;
     std::unique_ptr<RecordingFrameWindow>  m_rubber_band, m_recording_frame;
     QRect m_rubber_band_rect, m_select_window_outer_rect, m_select_window_inner_rect;
@@ -153,7 +142,6 @@ private:
     QString m_pulseaudio_source;
     std::unique_ptr<PulseAudioInput> m_pulseaudio_input;
 #endif
-
 //    VideoPreviewer *m_video_previewer;
 
 
@@ -187,7 +175,7 @@ private:
 
 private:
     //record
-    bool m_output_started;
+    bool m_output_started , m_page_started;
     ssr::enum_video_area m_video_area;
 
     QString m_file_base;
@@ -230,18 +218,17 @@ public:
     inline unsigned int GetPulseAudioSource() { return clamp(m_combobox_pulseaudio_source->currentIndex(), 0, (int) m_pulseaudio_sources.size() - 1); }
 #endif
 
-    //will change
 private:
     QLineEdit *m_lineedit_audio_options_not_shown;
 #if SSR_USE_PULSEAUDIO
-//	QLabel *m_label_pulseaudio_source;
     QComboBox *m_combobox_pulseaudio_source;
-//	QPushButton *m_pushbutton_pulseaudio_refresh;
 #endif
 public:
     inline void SetAudioOptions(const QString& options) { m_lineedit_audio_options_not_shown->setText(options); }
-    inline QString GetAudioOptions() { return m_lineedit_audio_options_not_shown->text(); }
-
+    inline QString GetAudioOptions()
+    {
+        return m_lineedit_audio_options_not_shown->text();
+    }
 };
 
-#endif // SSRTOOLS_H
+#endif // SCREENRECORDER_H

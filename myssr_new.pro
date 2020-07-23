@@ -51,7 +51,7 @@ SOURCES += \
     common/utils.cpp \
     main.cpp \
     mypopup.cpp \
-    ssrtools.cpp
+    screenrecorder.cpp
 
 HEADERS += \
     AV/AVWrapper.h \
@@ -89,11 +89,10 @@ HEADERS += \
     common/WidgetWrapper.h \
     common/utils.h \
     mypopup.h \
-    ssrtools.h
+    screenrecorder.h
 
 FORMS += \
-    mypopup.ui \
-    ssrtools.ui
+    mypopup.ui
 
 # Default rules for deployment.
 qnx: target.path = /tmp/$${TARGET}/bin

@@ -1,5 +1,6 @@
 #include <QApplication>
-#include "ssrtools.h"
+//#include "ssrtools.h"
+#include "screenrecorder.h"
 #include "CommandLineOptions.h"
 
 int main(int argc, char *argv[])
@@ -10,7 +11,9 @@ int main(int argc, char *argv[])
 
     Logger logger;
 
-    ssrtools ssr;
-    ssr.show();
+    //ssrtools ssr;
+    //ssr.show();
+    ScreenRecorder sr;
+    sr.show();
     return a.exec();
 }

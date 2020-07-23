@@ -4,22 +4,22 @@
 #include <QWidget>
 
 #include "Global.h"
-#include "ssrtools.h"
+//#include "ssrtools.h"
 #include "WidgetWrapper.h"
-
+#include  "screenrecorder.h"
 
 namespace Ui {
 class mypopup;
 }
 
-class ssrtools;
+class ScreenRecorder;
 
 class mypopup : public QWidget
 {
     Q_OBJECT
 
 public:
-    explicit mypopup(ssrtools* ssr, QWidget *parent = nullptr);
+    explicit mypopup(ScreenRecorder* ssr, QWidget *parent = nullptr);
     ~mypopup();
 
     void InputInit();
@@ -39,7 +39,7 @@ public:
 
 private:
     Ui::mypopup *ui;
-    ssrtools *ssr;
+    ScreenRecorder  *ssr;
 //    std::vector<ContainerData> m_containers, m_containers_av;
     std::vector<ScreenLabelWindow*> m_screen_labels;
 
