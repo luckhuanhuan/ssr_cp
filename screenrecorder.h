@@ -5,6 +5,7 @@
 #include <QLabel>
 #include <QSpinBox>
 #include <QWidget>
+#include <QCheckBox>
 
 #include "mypopup.h"
 #include "OutputSettings.h"
@@ -35,9 +36,6 @@ private:
 public:
     explicit ScreenRecorder(QWidget *parent = nullptr);
     //~ScreenRecorder();
-
-    void setStyle();
-
     void Init();
 
     void Input_init();
@@ -60,6 +58,54 @@ public:
     void FinishOutput();
     void UpdateRecordButton();
     bool IsBusy();
+    //QString GetContainerAVName();
+
+
+public:
+    enum enum_container {
+        CONTAINER_MKV,
+        CONTAINER_MP4,
+        CONTAINER_WEBM,
+        CONTAINER_OGG,
+        CONTAINER_OTHER,
+        CONTAINER_COUNT // must be last
+    };
+    enum enum_video_codec {
+        VIDEO_CODEC_H264,
+        VIDEO_CODEC_VP8,
+        VIDEO_CODEC_THEORA,
+        VIDEO_CODEC_OTHER,
+        VIDEO_CODEC_COUNT // must be last
+    };
+    enum enum_audio_codec {
+        AUDIO_CODEC_VORBIS,
+        AUDIO_CODEC_MP3,
+        AUDIO_CODEC_AAC,
+        AUDIO_CODEC_UNCOMPRESSED,
+        AUDIO_CODEC_OTHER,
+        AUDIO_CODEC_COUNT // must be last
+    };
+    enum enum_h264_preset {
+        H264_PRESET_ULTRAFAST,
+        H264_PRESET_SUPERFAST,
+        H264_PRESET_VERYFAST,
+        H264_PRESET_FASTER,
+        H264_PRESET_FAST,
+        H264_PRESET_MEDIUM,
+        H264_PRESET_SLOW,
+        H264_PRESET_SLOWER,
+        H264_PRESET_VERYSLOW,
+        H264_PRESET_PLACEBO,
+        H264_PRESET_COUNT // must be last
+    };
+    inline unsigned int GetVideoFrameRate() { return m_spinbox_video_frame_rate->value(); }
+    inline void SetVideoFrameRate(unsigned int frame_rate) { m_spinbox_video_frame_rate->setValue(frame_rate); }
+
+    //enum_container GetContainer();
+   // unsigned int GetContainerAV();
+    inline void SetContainer(enum_container container);
+    inline void SetContainerAV(unsigned int container);
+
 private slots:
     void on_m_toolButton_options_clicked();
     void on_m_pushbutton_video_select_rectangle_clicked();
@@ -68,7 +114,7 @@ private slots:
     void OnRecordStart();
     void OnRecordPause();
     void OnRecordStartPause();
-
+    //void OnBrowse();
 private:
     void LoadInputProfileSettings(QSettings* settings);
     void LoadOutputProfileSettings(QSettings* settings);
@@ -83,19 +129,20 @@ private:
     void StopGrabbing();
     void UpdateRubberBand();
     void SetVideoAreaFromRubberBand();
-
+    void LoadAVProfileSettings(QSettings *settings);
 #if SSR_USE_PULSEAUDIO
     void LoadPulseAudioSources();
 #endif
 
     //record
     void UpdateInput();
-
+    QString GetFileProtocol();
 
 public slots:
     void OnUpdateRecordingFrame();
     void OnUpdateVideoAreaFields();
-
+    void OnUpdateSuffixAndContainerFields();
+    void OnUpdateContainerFields();
 protected:
     virtual void mousePressEvent(QMouseEvent* event) override;
     virtual void mouseReleaseEvent(QMouseEvent* event) override;
@@ -105,7 +152,6 @@ protected:
 private:
     mypopup *mp;
     QSettings settings;
-
     bool options_show;
     bool m_wait_saving;
     bool m_video_area_follow_fullscreen;
@@ -113,16 +159,12 @@ private:
     unsigned int m_video_frame_rate;
 
     bool m_video_record_cursor;
-
     bool m_audio_enabled;
     unsigned int m_audio_channels, m_audio_sample_rate;
 
-
     OutputSettings m_output_settings;
     std::unique_ptr<OutputManager> m_output_manager;
-
     QButtonGroup *m_buttongroup_video_area;
-
     QLabel *m_label_video_x, *m_label_video_y, *m_label_video_w, *m_label_video_h;
     QSpinBox *m_spinbox_video_x, *m_spinbox_video_y, *m_spinbox_video_w, *m_spinbox_video_h;
     QPushButton *m_pushbutton_start, *m_pushbutton_stop, *m_pushbutton_options;
@@ -130,12 +172,27 @@ private:
     bool m_grabbing, m_selecting_window;
     std::unique_ptr<RecordingFrameWindow>  m_rubber_band, m_recording_frame;
     QRect m_rubber_band_rect, m_select_window_outer_rect, m_select_window_inner_rect;
-
+    QLabel *label_frame_rate;
+    //音频比特率
+    QLabel *m_label_video_kbit_rate;
+    QLineEdit *m_lineedit_video_kbit_rate;
+    //是品真理
+    QSpinBox *m_spinbox_video_frame_rate;
+    //录制光标
+    QCheckBox *m_checkbox_record_cursor;
+    //录制声音
+    QCheckBox *m_checkbox_audio_enable;
+    QComboBox *m_combobox_container;
+    //另存为
+    QLineEdit *m_lineedit_file;
+    QComboBox *m_combobox_container_av;
+    QPushButton *m_pushButton_storelocation;
+    QComboBox *m_combobox_video_codec;
 #if SSR_USE_PULSEAUDIO
     bool m_pulseaudio_available;
     std::vector<PulseAudioInput::Source> m_pulseaudio_sources;
 #endif
-
+    QLineEdit *m_lineedit_file_not_shown;
     ssr::enum_audio_backend m_audio_backend;
     std::unique_ptr<X11Input> m_x11_input;
 #if SSR_USE_PULSEAUDIO
@@ -143,8 +200,6 @@ private:
     std::unique_ptr<PulseAudioInput> m_pulseaudio_input;
 #endif
 //    VideoPreviewer *m_video_previewer;
-
-
 private:
     //output
     struct ContainerData {
@@ -188,13 +243,15 @@ private:
 
     QTimer *m_timer_schedule, *m_timer_update_info;
 
+    enum_container m_old_container;
+    unsigned int m_old_container_av;
 
 public:
     inline ssr::enum_video_area GetVideoArea() { return (ssr::enum_video_area) clamp(m_buttongroup_video_area->checkedId(), 0, int(ssr::enum_video_area::VIDEO_AREA_COUNT) - 1); }
 
     void SetVideoArea(ssr::enum_video_area area);
 //    void SetVideoAreaScreen(unsigned int screen);
-
+    QString GetContainerAVName();
 
     void SetVideoX(unsigned int x);
     void SetVideoY(unsigned int y);
@@ -212,11 +269,22 @@ public:
     inline std::vector<AudioCodecData> GetAudioCodecs() { return m_audio_codecs; }
     inline std::vector<AudioCodecData> GetAudioCodecsAV() { return m_audio_codecs_av; }
     inline std::vector<AudioKBitRate> GetAudioKBitRates() { return m_audio_kbit_rates; }
+    inline bool GetAudioEnabled() { return m_checkbox_audio_enable->isChecked(); }
+    inline bool GetVideoRecordCursor() { return m_checkbox_record_cursor->isChecked(); }
+    //获取音频比特率
+    inline unsigned int GetVideoKBitRate() { return m_lineedit_video_kbit_rate->text().toUInt(); }
 
+    inline enum_container GetContainer()
+    {
+        return (enum_container) clamp(m_combobox_container->currentIndex(), 0, CONTAINER_COUNT - 1);
+    }
 
+    inline QString GetFile() { return m_lineedit_file->text(); }
+    inline unsigned int GetContainerAV() { return clamp(m_combobox_container_av->currentIndex(), 0, (int) m_containers_av.size() - 1); }
 #if SSR_USE_PULSEAUDIO
     inline unsigned int GetPulseAudioSource() { return clamp(m_combobox_pulseaudio_source->currentIndex(), 0, (int) m_pulseaudio_sources.size() - 1); }
 #endif
+   // inline void SetFile(const QString& file) { m_lineedit_file->setText(file); }
 
 private:
     QLineEdit *m_lineedit_audio_options_not_shown;

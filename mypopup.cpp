@@ -20,11 +20,8 @@ mypopup::mypopup(ScreenRecorder *ssr, QWidget *parent) :
     this->setWindowFlags(Qt::FramelessWindowHint | Qt::WindowSystemMenuHint | Qt::WindowMinMaxButtonsHint|Qt::WindowStaysOnTopHint);
 
     this->ssr = static_cast<ScreenRecorder*>(ssr);
-
     InputInit();
-
     OutputInit();
-
 }
 
 mypopup::~mypopup()
@@ -69,11 +66,8 @@ void mypopup::OutputInit()
     for (unsigned int i = 0; i < sizeof(ssr_kbit_rates)/sizeof(ssr_kbit_rates[0]); ++i) {
         ui->m_comboBox_audiorate->addItem(ssr_kbit_rates[i].rate);
     }
-
-
     QSettings settings(CommandLineOptions::GetSettingsFile(), QSettings::IniFormat);
     LoadAVProfileSettings(&settings);
-
 }
 
 void mypopup::LoadScreenConfigurations()
@@ -264,7 +258,6 @@ void mypopup::OnUpdateSuffixAndContainerFields()
             }
         }
     }
-
     // update fields
     OnUpdateContainerFields();
 }
@@ -275,11 +268,10 @@ void mypopup::OnUpdateContainerFields()
     unsigned int container_av = GetContainerAV();
 
     // show/hide fields
-//    GroupVisible({m_label_container_av_not_shown, m_combobox_container_av_not_shown}, (container == ssr::enum_container::CONTAINER_OTHER));
+    //GroupVisible({m_label_container_av_not_shown, m_combobox_container_av_not_shown}, (container == ssr::enum_container::CONTAINER_OTHER));
 
     // show/hide warning
-//    m_label_container_warning->setVisible(GetContainerAVName() == "mp4");
-
+    //    m_label_container_warning->setVisible(GetContainerAVName() == "mp4");
     // mark uninstalled or unsupported codecs
     auto ssr_video_codecs = ssr->GetVideoCodecs();
     auto ssr_audio_codecs = ssr->GetAudioCodecs();

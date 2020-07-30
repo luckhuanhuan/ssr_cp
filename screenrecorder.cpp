@@ -6,6 +6,7 @@
 #include "CommandLineOptions.h"
 #include "EnumStrings.h"
 #include <QProgressDialog>
+#include <QFileDialog>
 
 ENUMSTRINGS(ssr::enum_video_area) = {
     {ssr::enum_video_area::VIDEO_AREA_SCREEN, "screen"},
@@ -38,26 +39,17 @@ ENUMSTRINGS(ssr::enum_audio_codec) = {
 ScreenRecorder::ScreenRecorder(QWidget *parent) :
     QWidget(parent)
 {
-    setStyle();
+   //初始化页面部件
     Init();
+    //选项页面
     mp = new mypopup(this, parent);
     Prepare_Record();
 }
 
-void ScreenRecorder::setStyle()
-{
-    QString runPath = QCoreApplication::applicationDirPath();
-    QFile file(runPath + "/qss/ssrtools.qss");
-    qDebug() << "bybobbi: " << file.fileName();
-    file.open(QFile::ReadOnly);
-    QTextStream fileText(&file);
-    QString stylesheet = fileText.readAll();
-    this->setStyleSheet(stylesheet);
-    file.close();
-}
-
 void ScreenRecorder::Init()
 {
+    m_page_started = false;
+    m_output_started = false;
     options_show = false;
     m_grabbing = false;
     m_selecting_window = false;
@@ -81,8 +73,38 @@ void ScreenRecorder::Init()
     m_spinbox_video_w->move(90,120);
     m_spinbox_video_h = new QSpinBox(this);
     m_spinbox_video_h->move(290,120);
+
+    label_frame_rate = new QLabel(tr("Frame rate:"),this);
+    label_frame_rate->move(20,200);
+    m_spinbox_video_frame_rate = new QSpinBox(this);
+    m_spinbox_video_frame_rate->setRange(1, 1000);
+    m_spinbox_video_frame_rate->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    m_spinbox_video_frame_rate->setToolTip(tr("The number of frames per second in the final video. Higher frame rates use more CPU time."));
+    m_spinbox_video_frame_rate->move(150,200);
     m_pushbutton_start = new QPushButton(this);
     m_pushbutton_start->setText("开始录制");
+
+    QLabel *label_container = new QLabel(tr("Container:"), this);
+    label_container->move(330,230);
+    m_combobox_container = new QComboBox(this);
+    m_combobox_container->move(330,250);
+    QLabel *label_file = new QLabel(tr("Save as:"), this);
+    label_file->move(330,330);
+    m_lineedit_file = new QLineEdit(this);
+    m_lineedit_file->move(330,350);
+    m_pushButton_storelocation = new QPushButton(this);
+    m_pushButton_storelocation->setText("选择.....");
+    m_pushButton_storelocation->move(470,350);
+
+    m_checkbox_record_cursor = new QCheckBox(tr("Record cursor"), this);
+    m_checkbox_record_cursor->move(20,250);
+    m_checkbox_audio_enable = new QCheckBox(tr("Record audio"), this);
+    m_checkbox_audio_enable->move(150,250);
+
+    m_label_video_kbit_rate = new QLabel("音频比特率",this);
+    m_label_video_kbit_rate->move(20,350);
+    m_lineedit_video_kbit_rate = new QLineEdit(this);
+    m_lineedit_video_kbit_rate->move(150,350);
     m_pushbutton_start->move(20,400);
     m_pushbutton_stop  = new QPushButton(this);
     m_pushbutton_stop->setText("结束录制");
@@ -96,8 +118,34 @@ void ScreenRecorder::Init()
     m_pushbutton_video_select_window = new QPushButton(this);
     m_pushbutton_video_select_window->move(220,300);
     m_pushbutton_video_select_window->setText("选择窗口");
+    m_combobox_container_av = new QComboBox();
+     //m_lineedit_file_not_shown = new QLineEdit;
+    m_lineedit_file->setText( "simplescreencord.mp4");
+    //为部件添加事件和槽函数
     Input_init();
+    //设置存储格式
     Output_init();
+
+    m_old_container = (enum_container) 0;
+    m_old_container_av = 0;
+
+    //QComboBox 里添加类型
+    for(unsigned int i = 0; i < CONTAINER_COUNT; ++i) {
+        QString name = "\u200e" + m_containers[i].name + "\u200e";
+        if(i != CONTAINER_OTHER && !AVFormatIsInstalled(m_containers[i].avname))
+            name += " \u200e" + tr("(not installed)") + "\u200e";
+        m_combobox_container->addItem(name);
+    }
+    m_combobox_container->setToolTip(tr("The container (file format) that will be used to save the recording.\n"
+                                        "Note that not all codecs are supported by all containers, and that not all media players can read all file formats.\n"
+                                        "- Matroska (MKV) supports all the codecs, but is less well-known.\n"
+
+                                        "- MP4 is the most well-known format and will play on almost any modern media player, but supports only H.264 video\n"
+                                        "   (and many media players only support AAC audio).\n"
+                                        "- WebM is intended for embedding video into websites (with the HTML5 <video> tag). The format was created by Google.\n"
+                                        "   WebM is supported by default in Firefox, Chrome and Opera, and plugins are available for Internet Explorer and Safari.\n"
+                                        "   It supports only VP8 and Vorbis.\n"
+                                        "- OGG supports only Theora and Vorbis."));
     LoadSettings();
 }
 
@@ -105,10 +153,6 @@ void ScreenRecorder::Input_init()
 {
     //input
     m_buttongroup_video_area = new QButtonGroup;
-   /* m_buttongroup_video_area->addButton(ui->m_radioButton_fullscreen, int(ssr::enum_video_area::VIDEO_AREA_SCREEN));
-    m_buttongroup_video_area->addButton(ui->m_radioButton_fixed, int(ssr::enum_video_area::VIDEO_AREA_FIXED));
-    m_buttongroup_video_area->addButton(ui->m_radioButton_cursor, int(ssr::enum_video_area::VIDEO_AREA_CURSOR));
-    */
     m_spinbox_video_x->setRange(0, SSR_MAX_IMAGE_SIZE);
     m_spinbox_video_x->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     m_spinbox_video_y->setRange(0, SSR_MAX_IMAGE_SIZE);
@@ -117,7 +161,6 @@ void ScreenRecorder::Input_init()
     m_spinbox_video_w->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     m_spinbox_video_h->setRange(0, SSR_MAX_IMAGE_SIZE);
     m_spinbox_video_h->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-
     connect(m_buttongroup_video_area, SIGNAL(buttonClicked(int)), this, SLOT(OnUpdateVideoAreaFields()));
     connect(m_spinbox_video_x, SIGNAL(focusIn()), this, SLOT(OnUpdateRecordingFrame()));
     connect(m_spinbox_video_x, SIGNAL(focusOut()), this, SLOT(OnUpdateRecordingFrame()));
@@ -131,19 +174,25 @@ void ScreenRecorder::Input_init()
     connect(m_spinbox_video_h, SIGNAL(focusIn()), this, SLOT(OnUpdateRecordingFrame()));
     connect(m_spinbox_video_h, SIGNAL(focusOut()), this, SLOT(OnUpdateRecordingFrame()));
     connect(m_spinbox_video_h, SIGNAL(valueChanged(int)), this, SLOT(OnUpdateRecordingFrame()));
+    connect(m_pushbutton_video_select_rectangle, &QPushButton::clicked, this, &ScreenRecorder::on_m_pushbutton_video_select_rectangle_clicked);
+    connect(m_pushbutton_video_select_window, &QPushButton::clicked, this, &ScreenRecorder::on_m_pushbutton_video_select_window_clicked);
     connect(m_pushbutton_start,&QPushButton::clicked,this,&ScreenRecorder::OnRecordStartPause);
     connect(m_pushbutton_options,&QPushButton::clicked,this,&ScreenRecorder::on_m_toolButton_options_clicked);
-
+    connect(m_combobox_container, SIGNAL(activated(int)), this, SLOT(OnUpdateSuffixAndContainerFields()));
 #if SSR_USE_PULSEAUDIO
-//            m_label_pulseaudio_source = new QLabel(tr("Source:"), groupbox_audio);
     m_combobox_pulseaudio_source = new QComboBox;
-//            m_combobox_pulseaudio_source->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-//            m_combobox_pulseaudio_source->setToolTip(tr("The PulseAudio source that will be used for recording.\n"
-//                                                        "A 'monitor' is a source that records the audio played by other applications.", "Don't translate 'monitor' unless PulseAudio does this as well"));
-//            m_pushbutton_pulseaudio_refresh = new QPushButton(tr("Refresh"), groupbox_audio);
-//            m_pushbutton_pulseaudio_refresh->setToolTip(tr("Refreshes the list of PulseAudio sources."));
     LoadPulseAudioSources();
 #endif
+}
+
+void ScreenRecorder::SetContainer(ScreenRecorder::enum_container container)
+{
+    m_combobox_container->setCurrentIndex(clamp((unsigned int) container, 0u, (unsigned int) ssr::enum_container::CONTAINER_COUNT - 1));
+}
+
+void ScreenRecorder::SetContainerAV(unsigned int container)
+{
+   //m_combobox_container_av_not_shown->setCurrentIndex(clamp(container, 0u, (unsigned int) ssr->GetContainersAV().size() - 1));
 }
 
 void ScreenRecorder::Output_init()
@@ -183,7 +232,6 @@ void ScreenRecorder::Output_init()
         {"160"},
         {"192"}
     };
-
     m_containers_av.clear();
 #if SSR_USE_AV_MUXER_ITERATE
     const AVOutputFormat *format;
@@ -192,7 +240,6 @@ void ScreenRecorder::Output_init()
 #else
     for(AVOutputFormat *format = av_oformat_next(NULL); format != NULL; format = av_oformat_next(format)) {
 #endif
-
         if (format->video_codec == AV_CODEC_ID_NONE)
             continue;
         ContainerData c;
@@ -255,34 +302,43 @@ void ScreenRecorder::Output_init()
     m_lineedit_audio_options_not_shown = new QLineEdit;
 }
 
+QString ScreenRecorder::GetContainerAVName() {
+    enum_container container = GetContainer();
+    if(container != CONTAINER_OTHER)
+        return m_containers[container].avname;
+    else {
+        return QString("");
+    }
+}
+static bool MatchSuffix(const QString& suffix, const QStringList& suffixes) {
+    return ((suffix.isEmpty() && suffixes.isEmpty()) || suffixes.contains(suffix, Qt::CaseInsensitive));
+}
+
 void ScreenRecorder::Prepare_Record()
 {
     //gui init
     m_timer_update_info = new QTimer(this);
     connect(m_timer_update_info, SIGNAL(timeout()), this, SLOT(OnUpdateInformation()));
-
     //record init
     m_page_started = false;
     m_output_started = false;
-
     m_input_started = false;
     m_recorded_something = false;
-
     //get the audio input settings
-    m_audio_enabled =  true;
+    //获取是否录音
+    m_audio_enabled =  GetAudioEnabled();
     m_audio_channels = 2;
     m_audio_sample_rate = 48000;
-
     m_video_area_follow_fullscreen = true;
-    //bybobbi
-    m_video_frame_rate = 30;
-
+    //获取视频帧率  和是否显示鼠标
+    m_video_frame_rate = GetVideoFrameRate();
+    m_video_record_cursor = GetVideoRecordCursor();
 #if SSR_USE_PULSEAUDIO
     m_pulseaudio_source = GetPulseAudioSourceName();
 #endif
     //get the output settings
     m_output_settings.file = QString();	//will be set later
-    m_output_settings.container_avname  = mp->GetContainerAVName();
+    //m_output_settings.container_avname  = mp->GetContainerAVName();
     m_output_settings.video_codec_avname = mp->GetVideoCodecAVName();
 //  m_output_settings.video_kbit_rate = mp->GetVideoKBitRate();
     m_output_settings.video_kbit_rate = 5000;
@@ -299,33 +355,17 @@ void ScreenRecorder::Prepare_Record()
     m_output_settings.audio_options.clear();
     m_output_settings.audio_channels = m_audio_channels;
     m_output_settings.audio_sample_rate = m_audio_sample_rate;
-
-//    m_output_settings.video_options.push_back(std::make_pair(QString("crf"), QString::number(GetH264CRF())));
-//    m_output_settings.video_options.push_back(std::make_pair(QString("preset"), EnumToString(GetH264Preset())));
+    m_output_settings.container_avname = GetContainerAVName();
     m_output_settings.video_options.push_back(std::make_pair(QString("crf"), "23"));
     m_output_settings.video_options.push_back(std::make_pair(QString("preset"), "superfast"));
-
-//    switch(mp->GetAudioCodec()) {
-//        case ssr::enum_audio_codec::AUDIO_CODEC_OTHER: {
-//            m_output_settings.audio_options = GetOptionsFromString(mp->GetAudioOptions());
-//            break;
-//        }
-//        default: break; // to keep GCC happy
-//    }
-
-
+    m_output_settings.video_kbit_rate = GetVideoKBitRate();
     Logger::LogInfo("[PageRecord::StartPage] " + tr("Starting page ..."));
-
     Logger::LogInfo("[PageRecord::StartPage] " + tr("Started page."));
-
     m_recorded_something = false;
-
     UpdateInput();
 
     OnUpdateInformation();
     m_timer_update_info->start(1000);
-//    m_schedule_active = false;
-   // UpdateSchedule();
 }
 
 void ScreenRecorder::LoadSettings()
@@ -333,9 +373,76 @@ void ScreenRecorder::LoadSettings()
     QSettings settings(CommandLineOptions::GetSettingsFile(), QSettings::IniFormat);
     LoadInputSettings(&settings);
     LoadOutputSettings(&settings);
-
 }
 
+QString ScreenRecorder::GetFileProtocol() {
+    QRegExp protocol_regex("^([a-z0-9]+)://", Qt::CaseInsensitive, QRegExp::RegExp);
+    if(protocol_regex.indexIn(GetFile()) < 0) {
+        return QString();
+    }
+    return protocol_regex.cap(1);
+}
+//设置
+void ScreenRecorder::OnUpdateSuffixAndContainerFields() {
+    // change file extension
+    enum_container new_container = GetContainer();
+    unsigned int new_container_av = GetContainerAV();
+    if(GetFileProtocol().isNull()) {
+        QStringList old_suffixes = (m_old_container == CONTAINER_OTHER)? m_containers_av[m_old_container_av].suffixes : m_containers[m_old_container].suffixes;
+        QStringList new_suffixes = (new_container == CONTAINER_OTHER)? m_containers_av[new_container_av].suffixes : m_containers[new_container].suffixes;
+        QString file = GetFile();
+        qDebug()<<"OnUpdateSuffixAndContainerFields   is clicked";
+        if(!file.isEmpty()) {
+            qDebug()<<"OnUpdateSuffixAndContainerFields vvvv ....... is clicked";
+            QFileInfo fi(file);
+            if(new_suffixes.isEmpty())
+            {
+                 m_lineedit_file->setText(fi.path() + "/" + fi.completeBaseName());
+                 qDebug()<<"OnUpdateSuffixAndContainerFields  if....... is clicked";
+            }
+            else
+            {
+                 m_lineedit_file->setText(fi.path() + "/" + fi.completeBaseName() + "." + new_suffixes[0]);
+                 qDebug()<<"OnUpdateSuffixAndContainerFields else ....... is clicked";
+            }
+        }
+    }
+
+    // update fields
+    OnUpdateContainerFields();
+    qDebug()<<"OnUpdateContainerFields is clicked";
+}
+void ScreenRecorder::OnUpdateContainerFields() {
+
+    enum_container container = GetContainer();
+    unsigned int container_av = GetContainerAV();
+
+    // show/hide fields
+    //GroupVisible({m_label_container_av, m_combobox_container_av}, (container == CONTAINER_OTHER));
+
+    // show/hide warning
+    //m_label_container_warning->setVisible(GetContainerAVName() == "mp4");
+
+    // mark uninstalled or unsupported codecs
+    for(unsigned int i = 0; i < VIDEO_CODEC_OTHER; ++i) {
+        QString name = m_video_codecs[i].name;
+        if(!AVCodecIsInstalled(m_video_codecs[i].avname)                )
+            name += " (" + tr("not installed") + ")`";
+        else if(container != CONTAINER_OTHER && !m_containers[container].supported_video_codecs.count((ssr::enum_video_codec) i))
+            name += " (" + tr("not supported by container") + ")";
+        //m_combobox_video_codec->setItemText(i, name);
+    }
+    for(unsigned int i = 0; i < AUDIO_CODEC_OTHER; ++i) {
+        QString name = m_audio_codecs[i].name;
+        if(!AVCodecIsInstalled(m_audio_codecs[i].avname))
+            name += " (" + tr("not installed") + ")";
+        else if(container != CONTAINER_OTHER && !m_containers[container].supported_audio_codecs.count((ssr::enum_audio_codec) i))
+            name += " (" + tr("not supported by container") + ")";
+        //m_combobox_audio_codec->setItemText(i, name);
+    }
+    m_old_container = container;
+    m_old_container_av = container_av;
+}
 void ScreenRecorder::LoadInputSettings(QSettings *settings)
 {
     LoadInputProfileSettings(settings);
@@ -354,10 +461,8 @@ void ScreenRecorder::StartInput()
 #if SSR_USE_PULSEAUDIO
     assert(m_pulseaudio_input == NULL);
 #endif
-
     try {
         Logger::LogInfo("[PageRecord::StartInput] " + tr("Starting input ..."));
-
         // start the video input
         m_x11_input.reset(new X11Input(m_video_x, m_video_y, m_video_in_width, m_video_in_height, m_video_record_cursor,
                                        m_video_area == ssr::enum_video_area::VIDEO_AREA_CURSOR, m_video_area_follow_fullscreen));
@@ -367,7 +472,6 @@ void ScreenRecorder::StartInput()
 //            if(m_audio_backend == ssr::enum_audio_backend::AUDIO_BACKEND_PULSEAUDIO)
                 m_pulseaudio_input.reset(new PulseAudioInput(m_pulseaudio_source, m_audio_sample_rate));
 #endif
-
         Logger::LogInfo("[PageRecord::StartInput] " + tr("Started input."));
         m_input_started = true;
     } catch (...) {
@@ -404,12 +508,11 @@ void ScreenRecorder::on_m_toolButton_options_clicked()
    QPoint pos = this->pos();
    mp->move(og.x() + pos.x(), og.y() + pos.y() + 100);
    if (!options_show) {
-       options_show = true;
        mp->show();
    } else {
-       options_show = false;
        mp->hide();
    }
+   options_show = !options_show;
 }
 bool ScreenRecorder::IsBusy()
 {
@@ -441,12 +544,12 @@ void ScreenRecorder::OnRecordStartPause()
 }
 void ScreenRecorder::OnRecordStart()
 {
-    m_file_base = mp->GetFile();
+    m_file_base = GetFile();
     m_video_x = GetVideoX();
     m_video_y = GetVideoY();
     m_video_in_width = GetVideoW();
     m_video_in_height = GetVideoH();
-
+    Prepare_Record();
     if (m_output_started) return;
     try {
         Logger::LogInfo("[Begin Record: StartOutput]" + tr("Starting output ..."));
@@ -466,7 +569,6 @@ void ScreenRecorder::OnRecordStart()
             m_output_settings.video_height = m_video_in_height;
 //            }
             m_output_manager.reset(new OutputManager(m_output_settings));
-
         } else {
             m_output_manager->GetSynchronizer()->NewSegment();
         }
@@ -755,9 +857,6 @@ void ScreenRecorder::StopPage(bool save) {
 
     if(!m_page_started)
         return;
-
-    //m_schedule_active = false;
-    //UpdateSchedule();
 
     StopOutput(true);
     StopInput();
